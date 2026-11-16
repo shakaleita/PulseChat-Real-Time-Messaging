@@ -39,10 +39,11 @@ def health():
 
 from fastapi import WebSocket, WebSocketDisconnect
 setup("""CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room TEXT NOT NULL,author TEXT NOT NULL,body TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);""")
+from pydantic import Field
 class Message(BaseModel):
-    room:str="general"
-    author:str
-    body:str
+    room:str=Field(default='general',min_length=1,max_length=80)
+    author:str=Field(min_length=1,max_length=80)
+    body:str=Field(min_length=1,max_length=2000)
 clients:dict[str,list[WebSocket]]={}
 @app.get('/api/items')
 def items(room:str='general'):
@@ -59,6 +60,12 @@ async def create_item(d:Message):
     return message
 @app.websocket('/ws/{room}')
 async def socket(ws:WebSocket,room:str):
+    from security import session_user, COOKIE_NAME
+    allowed={x.strip() for x in os.getenv('CORS_ORIGINS','http://localhost:5173').split(',')}
+    origin=ws.headers.get('origin')
+    if (origin and origin not in allowed) or session_user(DB,ws.cookies.get(COOKIE_NAME)) is None:
+        await ws.close(code=1008)
+        return
     await ws.accept();clients.setdefault(room,[]).append(ws)
     try:
         while True:await ws.receive_text()
@@ -88,3 +95,13 @@ def search_messages(room: str = 'general', q: str = '', limit: int = 30):
         return rows(con.execute("""SELECT * FROM messages WHERE room=? AND body LIKE ? ESCAPE '!'
             ORDER BY id DESC LIMIT ?""",(room,pattern,limit)))
 
+
+@app.get('/api/rooms/{room}/stats')
+def room_stats(room:str):
+    if len(room)>80:raise HTTPException(422,'Room name too long')
+    with db() as con:
+        result=con.execute('SELECT COUNT(*) AS messages,COUNT(DISTINCT author) AS authors FROM messages WHERE room=?',(room,)).fetchone()
+        return {'room':room,**dict(result)}
+
+from security import install_auth
+install_auth(app,DB)

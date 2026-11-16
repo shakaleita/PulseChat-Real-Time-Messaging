@@ -5,9 +5,12 @@ from fastapi.testclient import TestClient
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 temp = tempfile.mkdtemp(prefix='portfolio-test-')
 os.environ['APP_DB']=str(Path(temp)/'test.db')
+os.environ['OWNER_SETUP_TOKEN']='test-only-setup-token-1234567890123'
 if 'main' in sys.modules: del sys.modules['main']
 from main import app
 client=TestClient(app)
+assert client.post('/api/auth/register',json={'username':'qaowner','password':'DemoPassword123!','setup_token':'test-only-setup-token-1234567890123'}).status_code==201
+assert client.post('/api/auth/login',json={'username':'qaowner','password':'DemoPassword123!'}).status_code==200
 
 def test_health():
     r=client.get('/api/health')
@@ -33,3 +36,15 @@ def test_room_directory_and_search_isolation():
     assert client.get('/api/messages/search',params={'room':'other','q':'Orbital'}).json()==[]
     assert client.get('/api/messages/search',params={'room':rid,'q':'%'}).json()==[]
 
+
+
+def test_v05_message_limits_and_room_statistics():
+    assert client.post('/api/items',json={'room':'general','author':'Engineer','body':'x'*2001}).status_code==422
+    assert client.post('/api/items',json={'room':'general','author':'Engineer','body':'Hello'}).status_code==201
+    stats=client.get('/api/rooms/general/stats').json()
+    assert stats['messages']>=1 and stats['authors']>=1
+
+def test_v05_authentication():
+    with TestClient(app) as anonymous:
+        assert anonymous.get('/api/items').status_code==401
+        assert anonymous.post('/api/auth/register',json={'username':'intruder','password':'DemoPassword123!','setup_token':'bad'}).status_code==403
