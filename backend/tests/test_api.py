@@ -60,3 +60,10 @@ def test_v06_audit_record_and_cross_site_guard():
     assert client.get('/api/auth/audit',params={'limit':201}).status_code==422
     blocked=client.post('/api/__audit_probe_404',headers={'sec-fetch-site':'cross-site'})
     assert blocked.status_code==403
+
+def test_room_names_are_canonical_and_search_is_bounded():
+    assert client.post('/api/items',json={'room':'../../other','author':'QA','body':'Rejected'}).status_code==422
+    assert client.get('/api/items',params={'room':'../unsafe'}).status_code==422
+    assert client.get('/api/rooms/invalid.room/stats').status_code==422
+    assert client.get('/api/messages/search',params={'room':'general','q':'X'*201}).status_code==422
+    assert client.post('/api/items',json={'room':'project-alpha_1','author':'QA','body':'Allowed'}).status_code==201
