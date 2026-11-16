@@ -42,7 +42,7 @@ setup("""CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY,room TEXT NO
 from pydantic import Field
 import re
 class Message(BaseModel):
-    room:str=Field(default='general',min_length=1,max_length=80,pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}
+    room:str=Field(default='general',min_length=1,max_length=80,pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$')
     author:str=Field(min_length=1,max_length=80)
     body:str=Field(min_length=1,max_length=2000)
 clients:dict[str,list[WebSocket]]={}
